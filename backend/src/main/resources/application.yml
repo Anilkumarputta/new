@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: editorial-content-platform
+  datasource:
+    url: jdbc:postgresql://localhost:5432/editorial_platform
+    username: editorial_user
+    password: editorial_password
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
