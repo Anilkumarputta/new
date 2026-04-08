@@ -5,6 +5,16 @@ spring:
     url: jdbc:postgresql://localhost:5432/editorial_platform
     username: editorial_user
     password: editorial_password
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  sql:
+    init:
+      mode: always
 
 server:
   port: 8080
