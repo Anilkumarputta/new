@@ -16,6 +16,8 @@ import com.editorial.platform.category.repository.CategoryRepository;
 import com.editorial.platform.common.exception.BadRequestException;
 import com.editorial.platform.common.exception.ResourceNotFoundException;
 import com.editorial.platform.common.model.PublishingStatus;
+import com.editorial.platform.event.model.ContentEventType;
+import com.editorial.platform.event.service.ContentEventPublisher;
 import com.editorial.platform.workout.api.dto.WorkoutRequest;
 import com.editorial.platform.workout.api.dto.WorkoutResponse;
 import com.editorial.platform.workout.model.Workout;
@@ -29,15 +31,18 @@ public class WorkoutService {
     private final WorkoutRepository workoutRepository;
     private final CategoryRepository categoryRepository;
     private final AuditLogService auditLogService;
+    private final ContentEventPublisher contentEventPublisher;
 
     public WorkoutService(
         WorkoutRepository workoutRepository,
         CategoryRepository categoryRepository,
-        AuditLogService auditLogService
+        AuditLogService auditLogService,
+        ContentEventPublisher contentEventPublisher
     ) {
         this.workoutRepository = workoutRepository;
         this.categoryRepository = categoryRepository;
         this.auditLogService = auditLogService;
+        this.contentEventPublisher = contentEventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -66,6 +71,7 @@ public class WorkoutService {
             savedWorkout.getStatus(),
             "Workout created"
         );
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_CREATED);
         return toResponse(savedWorkout);
     }
 
@@ -81,6 +87,7 @@ public class WorkoutService {
             savedWorkout.getStatus(),
             "Workout details updated"
         );
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_UPDATED);
         return toResponse(savedWorkout);
     }
 
@@ -95,24 +102,38 @@ public class WorkoutService {
             null,
             "Workout deleted"
         );
+        contentEventPublisher.publish(
+            ContentEventType.WORKOUT_DELETED,
+            "WORKOUT",
+            id,
+            workout.getTitle(),
+            workout.getStatus().name(),
+            workout.getCategory().getName()
+        );
     }
 
     public WorkoutResponse submitForReview(Long id) {
         Workout workout = findWorkout(id);
         changeStatus(workout, PublishingStatus.REVIEW, "Workout moved to review");
-        return toResponse(workoutRepository.save(workout));
+        Workout savedWorkout = workoutRepository.save(workout);
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_SENT_TO_REVIEW);
+        return toResponse(savedWorkout);
     }
 
     public WorkoutResponse publish(Long id) {
         Workout workout = findWorkout(id);
         changeStatus(workout, PublishingStatus.PUBLISHED, "Workout published");
-        return toResponse(workoutRepository.save(workout));
+        Workout savedWorkout = workoutRepository.save(workout);
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_PUBLISHED);
+        return toResponse(savedWorkout);
     }
 
     public WorkoutResponse moveBackToDraft(Long id) {
         Workout workout = findWorkout(id);
         changeStatus(workout, PublishingStatus.DRAFT, "Workout moved back to draft");
-        return toResponse(workoutRepository.save(workout));
+        Workout savedWorkout = workoutRepository.save(workout);
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_MOVED_TO_DRAFT);
+        return toResponse(savedWorkout);
     }
 
     private void changeStatus(Workout workout, PublishingStatus targetStatus, String message) {
@@ -205,5 +226,16 @@ public class WorkoutService {
         response.setCreatedAt(workout.getCreatedAt());
         response.setUpdatedAt(workout.getUpdatedAt());
         return response;
+    }
+
+    private void publishEvent(Workout workout, ContentEventType eventType) {
+        contentEventPublisher.publish(
+            eventType,
+            "WORKOUT",
+            workout.getId(),
+            workout.getTitle(),
+            workout.getStatus().name(),
+            workout.getCategory().getName()
+        );
     }
 }

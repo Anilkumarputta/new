@@ -5,6 +5,23 @@ spring:
     url: jdbc:postgresql://localhost:5432/editorial_platform
     username: editorial_user
     password: editorial_password
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: editorial-content-platform
+      auto-offset-reset: earliest
+      properties:
+        spring:
+          json:
+            trusted:
+              packages: "com.editorial.platform.event"
+    producer:
+      properties:
+        spring:
+          json:
+            add:
+              type:
+                headers: false
   jpa:
     hibernate:
       ddl-auto: none

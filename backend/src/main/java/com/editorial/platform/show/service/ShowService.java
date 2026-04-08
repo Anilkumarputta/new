@@ -13,6 +13,8 @@ import com.editorial.platform.category.repository.CategoryRepository;
 import com.editorial.platform.common.exception.BadRequestException;
 import com.editorial.platform.common.exception.ResourceNotFoundException;
 import com.editorial.platform.common.model.PublishingStatus;
+import com.editorial.platform.event.model.ContentEventType;
+import com.editorial.platform.event.service.ContentEventPublisher;
 import com.editorial.platform.show.api.dto.ShowRequest;
 import com.editorial.platform.show.api.dto.ShowResponse;
 import com.editorial.platform.show.model.Show;
@@ -25,15 +27,18 @@ public class ShowService {
     private final ShowRepository showRepository;
     private final CategoryRepository categoryRepository;
     private final AuditLogService auditLogService;
+    private final ContentEventPublisher contentEventPublisher;
 
     public ShowService(
         ShowRepository showRepository,
         CategoryRepository categoryRepository,
-        AuditLogService auditLogService
+        AuditLogService auditLogService,
+        ContentEventPublisher contentEventPublisher
     ) {
         this.showRepository = showRepository;
         this.categoryRepository = categoryRepository;
         this.auditLogService = auditLogService;
+        this.contentEventPublisher = contentEventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -68,6 +73,7 @@ public class ShowService {
             savedShow.getStatus(),
             "Show created"
         );
+        publishEvent(savedShow, ContentEventType.SHOW_CREATED);
         return toResponse(savedShow);
     }
 
@@ -88,6 +94,7 @@ public class ShowService {
             savedShow.getStatus(),
             "Show details updated"
         );
+        publishEvent(savedShow, ContentEventType.SHOW_UPDATED);
         return toResponse(savedShow);
     }
 
@@ -102,26 +109,40 @@ public class ShowService {
             null,
             "Show deleted"
         );
+        contentEventPublisher.publish(
+            ContentEventType.SHOW_DELETED,
+            "SHOW",
+            id,
+            show.getTitle(),
+            show.getStatus().name(),
+            show.getCategory().getName()
+        );
     }
 
     public ShowResponse submitForReview(Long id) {
         Show show = findShow(id);
         changeStatus(show, PublishingStatus.REVIEW, "Show moved to review");
-        return toResponse(showRepository.save(show));
+        Show savedShow = showRepository.save(show);
+        publishEvent(savedShow, ContentEventType.SHOW_SENT_TO_REVIEW);
+        return toResponse(savedShow);
     }
 
     public ShowResponse publish(Long id) {
         Show show = findShow(id);
         changeStatus(show, PublishingStatus.PUBLISHED, "Show published");
         show.setPublished(true);
-        return toResponse(showRepository.save(show));
+        Show savedShow = showRepository.save(show);
+        publishEvent(savedShow, ContentEventType.SHOW_PUBLISHED);
+        return toResponse(savedShow);
     }
 
     public ShowResponse moveBackToDraft(Long id) {
         Show show = findShow(id);
         changeStatus(show, PublishingStatus.DRAFT, "Show moved back to draft");
         show.setPublished(false);
-        return toResponse(showRepository.save(show));
+        Show savedShow = showRepository.save(show);
+        publishEvent(savedShow, ContentEventType.SHOW_MOVED_TO_DRAFT);
+        return toResponse(savedShow);
     }
 
     private void changeStatus(Show show, PublishingStatus targetStatus, String message) {
@@ -175,5 +196,16 @@ public class ShowService {
         response.setCreatedAt(show.getCreatedAt());
         response.setUpdatedAt(show.getUpdatedAt());
         return response;
+    }
+
+    private void publishEvent(Show show, ContentEventType eventType) {
+        contentEventPublisher.publish(
+            eventType,
+            "SHOW",
+            show.getId(),
+            show.getTitle(),
+            show.getStatus().name(),
+            show.getCategory().getName()
+        );
     }
 }
