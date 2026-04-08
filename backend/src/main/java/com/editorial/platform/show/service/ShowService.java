@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.editorial.platform.async.service.PublishingAsyncService;
 import com.editorial.platform.audit.model.AuditAction;
 import com.editorial.platform.audit.model.AuditEntityType;
 import com.editorial.platform.audit.service.AuditLogService;
@@ -31,19 +32,22 @@ public class ShowService {
     private final AuditLogService auditLogService;
     private final ContentEventPublisher contentEventPublisher;
     private final ContentSearchService contentSearchService;
+    private final PublishingAsyncService publishingAsyncService;
 
     public ShowService(
         ShowRepository showRepository,
         CategoryRepository categoryRepository,
         AuditLogService auditLogService,
         ContentEventPublisher contentEventPublisher,
-        ContentSearchService contentSearchService
+        ContentSearchService contentSearchService,
+        PublishingAsyncService publishingAsyncService
     ) {
         this.showRepository = showRepository;
         this.categoryRepository = categoryRepository;
         this.auditLogService = auditLogService;
         this.contentEventPublisher = contentEventPublisher;
         this.contentSearchService = contentSearchService;
+        this.publishingAsyncService = publishingAsyncService;
     }
 
     @Transactional(readOnly = true)
@@ -143,6 +147,7 @@ public class ShowService {
         Show savedShow = showRepository.save(show);
         publishEvent(savedShow, ContentEventType.SHOW_PUBLISHED);
         indexShow(savedShow);
+        publishingAsyncService.runPostPublishTasks("SHOW", savedShow.getId(), savedShow.getTitle());
         return toResponse(savedShow);
     }
 

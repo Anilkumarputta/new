@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.editorial.platform.async.service.PublishingAsyncService;
 import com.editorial.platform.audit.model.AuditAction;
 import com.editorial.platform.audit.model.AuditEntityType;
 import com.editorial.platform.audit.service.AuditLogService;
@@ -35,19 +36,22 @@ public class WorkoutService {
     private final AuditLogService auditLogService;
     private final ContentEventPublisher contentEventPublisher;
     private final ContentSearchService contentSearchService;
+    private final PublishingAsyncService publishingAsyncService;
 
     public WorkoutService(
         WorkoutRepository workoutRepository,
         CategoryRepository categoryRepository,
         AuditLogService auditLogService,
         ContentEventPublisher contentEventPublisher,
-        ContentSearchService contentSearchService
+        ContentSearchService contentSearchService,
+        PublishingAsyncService publishingAsyncService
     ) {
         this.workoutRepository = workoutRepository;
         this.categoryRepository = categoryRepository;
         this.auditLogService = auditLogService;
         this.contentEventPublisher = contentEventPublisher;
         this.contentSearchService = contentSearchService;
+        this.publishingAsyncService = publishingAsyncService;
     }
 
     @Transactional(readOnly = true)
@@ -135,6 +139,7 @@ public class WorkoutService {
         Workout savedWorkout = workoutRepository.save(workout);
         publishEvent(savedWorkout, ContentEventType.WORKOUT_PUBLISHED);
         indexWorkout(savedWorkout);
+        publishingAsyncService.runPostPublishTasks("WORKOUT", savedWorkout.getId(), savedWorkout.getTitle());
         return toResponse(savedWorkout);
     }
 
