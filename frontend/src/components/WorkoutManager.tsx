@@ -7,6 +7,7 @@ interface WorkoutManagerProps {
   categories: Category[];
   workouts: Workout[];
   setWorkouts: Dispatch<SetStateAction<Workout[]>>;
+  refreshAuditLogs: () => Promise<void>;
 }
 
 interface WorkoutFormState {
@@ -52,11 +53,17 @@ function toPayload(form: WorkoutFormState): WorkoutPayload {
   };
 }
 
-export function WorkoutManager({ categories, workouts, setWorkouts }: WorkoutManagerProps) {
+export function WorkoutManager({
+  categories,
+  workouts,
+  setWorkouts,
+  refreshAuditLogs
+}: WorkoutManagerProps) {
   const [form, setForm] = useState<WorkoutFormState>(emptyWorkoutForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [transitioningId, setTransitioningId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -94,6 +101,7 @@ export function WorkoutManager({ categories, workouts, setWorkouts }: WorkoutMan
 
       setMessage(editingId ? "Workout updated successfully." : "Workout created successfully.");
       resetForm();
+      await refreshAuditLogs();
     } catch (error) {
       setMessage(extractErrorMessage(error));
     } finally {
@@ -112,10 +120,35 @@ export function WorkoutManager({ categories, workouts, setWorkouts }: WorkoutMan
         resetForm();
       }
       setMessage("Workout deleted successfully.");
+      await refreshAuditLogs();
     } catch (error) {
       setMessage(extractErrorMessage(error));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleStatusChange(id: number, action: "review" | "publish" | "draft") {
+    setTransitioningId(id);
+    setMessage("");
+
+    try {
+      const updatedWorkout =
+        action === "review"
+          ? await api.submitWorkoutForReview(id)
+          : action === "publish"
+            ? await api.publishWorkout(id)
+            : await api.moveWorkoutBackToDraft(id);
+
+      setWorkouts((current) =>
+        current.map((workout) => (workout.id === updatedWorkout.id ? updatedWorkout : workout))
+      );
+      setMessage("Workout workflow updated successfully.");
+      await refreshAuditLogs();
+    } catch (error) {
+      setMessage(extractErrorMessage(error));
+    } finally {
+      setTransitioningId(null);
     }
   }
 
@@ -287,6 +320,7 @@ export function WorkoutManager({ categories, workouts, setWorkouts }: WorkoutMan
                 <th className="px-6 py-4 font-semibold">Trainer</th>
                 <th className="px-6 py-4 font-semibold">Details</th>
                 <th className="px-6 py-4 font-semibold">Tags</th>
+                <th className="px-6 py-4 font-semibold">Workflow</th>
                 <th className="px-6 py-4 font-semibold">Actions</th>
               </tr>
             </thead>
@@ -321,6 +355,40 @@ export function WorkoutManager({ categories, workouts, setWorkouts }: WorkoutMan
                     </div>
                   </td>
                   <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      {workout.status === "DRAFT" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleStatusChange(workout.id, "review")}
+                          disabled={transitioningId === workout.id}
+                          className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                        >
+                          Send To Review
+                        </button>
+                      )}
+                      {workout.status === "REVIEW" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleStatusChange(workout.id, "publish")}
+                          disabled={transitioningId === workout.id}
+                          className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-50"
+                        >
+                          Publish
+                        </button>
+                      )}
+                      {workout.status === "PUBLISHED" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleStatusChange(workout.id, "draft")}
+                          disabled={transitioningId === workout.id}
+                          className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 disabled:opacity-50"
+                        >
+                          Move To Draft
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="flex gap-3">
                       <button
                         type="button"
@@ -343,7 +411,7 @@ export function WorkoutManager({ categories, workouts, setWorkouts }: WorkoutMan
               ))}
               {workouts.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-10 text-center text-slate-500">
                     No workouts found yet.
                   </td>
                 </tr>
