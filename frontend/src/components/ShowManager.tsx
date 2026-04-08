@@ -7,6 +7,7 @@ interface ShowManagerProps {
   categories: Category[];
   shows: Show[];
   setShows: Dispatch<SetStateAction<Show[]>>;
+  refreshAuditLogs: () => Promise<void>;
 }
 
 interface ShowFormState {
@@ -41,11 +42,12 @@ function toPayload(form: ShowFormState): ShowPayload {
   };
 }
 
-export function ShowManager({ categories, shows, setShows }: ShowManagerProps) {
+export function ShowManager({ categories, shows, setShows, refreshAuditLogs }: ShowManagerProps) {
   const [form, setForm] = useState<ShowFormState>(emptyShowForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [transitioningId, setTransitioningId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -83,6 +85,7 @@ export function ShowManager({ categories, shows, setShows }: ShowManagerProps) {
 
       setMessage(editingId ? "Show updated successfully." : "Show created successfully.");
       resetForm();
+      await refreshAuditLogs();
     } catch (error) {
       setMessage(extractErrorMessage(error));
     } finally {
@@ -101,10 +104,33 @@ export function ShowManager({ categories, shows, setShows }: ShowManagerProps) {
         resetForm();
       }
       setMessage("Show deleted successfully.");
+      await refreshAuditLogs();
     } catch (error) {
       setMessage(extractErrorMessage(error));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleStatusChange(id: number, action: "review" | "publish" | "draft") {
+    setTransitioningId(id);
+    setMessage("");
+
+    try {
+      const updatedShow =
+        action === "review"
+          ? await api.submitShowForReview(id)
+          : action === "publish"
+            ? await api.publishShow(id)
+            : await api.moveShowBackToDraft(id);
+
+      setShows((current) => current.map((show) => (show.id === updatedShow.id ? updatedShow : show)));
+      setMessage("Show workflow updated successfully.");
+      await refreshAuditLogs();
+    } catch (error) {
+      setMessage(extractErrorMessage(error));
+    } finally {
+      setTransitioningId(null);
     }
   }
 
@@ -213,6 +239,7 @@ export function ShowManager({ categories, shows, setShows }: ShowManagerProps) {
                 <th className="px-6 py-4 font-semibold">Category</th>
                 <th className="px-6 py-4 font-semibold">Status</th>
                 <th className="px-6 py-4 font-semibold">Updated</th>
+                <th className="px-6 py-4 font-semibold">Workflow</th>
                 <th className="px-6 py-4 font-semibold">Actions</th>
               </tr>
             </thead>
@@ -230,6 +257,40 @@ export function ShowManager({ categories, shows, setShows }: ShowManagerProps) {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-500">{formatDate(show.updatedAt)}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      {show.status === "DRAFT" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleStatusChange(show.id, "review")}
+                          disabled={transitioningId === show.id}
+                          className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                        >
+                          Send To Review
+                        </button>
+                      )}
+                      {show.status === "REVIEW" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleStatusChange(show.id, "publish")}
+                          disabled={transitioningId === show.id}
+                          className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-50"
+                        >
+                          Publish
+                        </button>
+                      )}
+                      {show.status === "PUBLISHED" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleStatusChange(show.id, "draft")}
+                          disabled={transitioningId === show.id}
+                          className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 disabled:opacity-50"
+                        >
+                          Move To Draft
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex gap-3">
                       <button
@@ -253,7 +314,7 @@ export function ShowManager({ categories, shows, setShows }: ShowManagerProps) {
               ))}
               {shows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-10 text-center text-slate-500">
                     No shows found yet.
                   </td>
                 </tr>
