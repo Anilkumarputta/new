@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.editorial.platform.audit.service.AuditLogService;
+import com.editorial.platform.async.service.PublishingAsyncService;
 import com.editorial.platform.category.model.Category;
 import com.editorial.platform.category.repository.CategoryRepository;
 import com.editorial.platform.common.exception.BadRequestException;
@@ -44,6 +45,9 @@ class ShowServiceTest {
     @Mock
     private ContentSearchService contentSearchService;
 
+    @Mock
+    private PublishingAsyncService publishingAsyncService;
+
     private ShowService showService;
 
     @BeforeEach
@@ -53,7 +57,8 @@ class ShowServiceTest {
             categoryRepository,
             auditLogService,
             contentEventPublisher,
-            contentSearchService
+            contentSearchService,
+            publishingAsyncService
         );
     }
 
