@@ -20,6 +20,7 @@ import com.editorial.platform.common.exception.BadRequestException;
 import com.editorial.platform.common.exception.ResourceNotFoundException;
 import com.editorial.platform.common.model.PublishingStatus;
 import com.editorial.platform.event.service.ContentEventPublisher;
+import com.editorial.platform.search.service.ContentSearchService;
 import com.editorial.platform.show.api.dto.ShowRequest;
 import com.editorial.platform.show.api.dto.ShowResponse;
 import com.editorial.platform.show.model.Show;
@@ -40,11 +41,20 @@ class ShowServiceTest {
     @Mock
     private ContentEventPublisher contentEventPublisher;
 
+    @Mock
+    private ContentSearchService contentSearchService;
+
     private ShowService showService;
 
     @BeforeEach
     void setUp() {
-        showService = new ShowService(showRepository, categoryRepository, auditLogService, contentEventPublisher);
+        showService = new ShowService(
+            showRepository,
+            categoryRepository,
+            auditLogService,
+            contentEventPublisher,
+            contentSearchService
+        );
     }
 
     @Test

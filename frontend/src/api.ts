@@ -1,4 +1,4 @@
-import type { AuditLog, Category, Show, ShowPayload, Workout, WorkoutPayload } from "./types";
+import type { AuditLog, Category, SearchResult, Show, ShowPayload, Workout, WorkoutPayload } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1";
 
@@ -26,6 +26,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   getCategories: () => request<Category[]>("/categories"),
   getAuditLogs: () => request<AuditLog[]>("/audit-logs"),
+  searchContent: (params: { q?: string; category?: string; trainer?: string; tag?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params.q) searchParams.set("q", params.q);
+    if (params.category) searchParams.set("category", params.category);
+    if (params.trainer) searchParams.set("trainer", params.trainer);
+    if (params.tag) searchParams.set("tag", params.tag);
+    const queryString = searchParams.toString();
+    return request<SearchResult[]>(`/search${queryString ? `?${queryString}` : ""}`);
+  },
   getShows: () => request<Show[]>("/shows"),
   createShow: (payload: ShowPayload) =>
     request<Show>("/shows", {

@@ -11,6 +11,9 @@ spring:
     keyspace-name: editorial_read_model
     local-datacenter: datacenter1
     schema-action: create_if_not_exists
+solr:
+  base-url: http://localhost:8983/solr
+  core: editorial_content
   kafka:
     bootstrap-servers: localhost:9092
     consumer:

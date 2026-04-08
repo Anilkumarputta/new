@@ -15,6 +15,8 @@ import com.editorial.platform.common.exception.ResourceNotFoundException;
 import com.editorial.platform.common.model.PublishingStatus;
 import com.editorial.platform.event.model.ContentEventType;
 import com.editorial.platform.event.service.ContentEventPublisher;
+import com.editorial.platform.search.model.SearchDocument;
+import com.editorial.platform.search.service.ContentSearchService;
 import com.editorial.platform.show.api.dto.ShowRequest;
 import com.editorial.platform.show.api.dto.ShowResponse;
 import com.editorial.platform.show.model.Show;
@@ -28,17 +30,20 @@ public class ShowService {
     private final CategoryRepository categoryRepository;
     private final AuditLogService auditLogService;
     private final ContentEventPublisher contentEventPublisher;
+    private final ContentSearchService contentSearchService;
 
     public ShowService(
         ShowRepository showRepository,
         CategoryRepository categoryRepository,
         AuditLogService auditLogService,
-        ContentEventPublisher contentEventPublisher
+        ContentEventPublisher contentEventPublisher,
+        ContentSearchService contentSearchService
     ) {
         this.showRepository = showRepository;
         this.categoryRepository = categoryRepository;
         this.auditLogService = auditLogService;
         this.contentEventPublisher = contentEventPublisher;
+        this.contentSearchService = contentSearchService;
     }
 
     @Transactional(readOnly = true)
@@ -74,6 +79,7 @@ public class ShowService {
             "Show created"
         );
         publishEvent(savedShow, ContentEventType.SHOW_CREATED);
+        indexShow(savedShow);
         return toResponse(savedShow);
     }
 
@@ -95,6 +101,7 @@ public class ShowService {
             "Show details updated"
         );
         publishEvent(savedShow, ContentEventType.SHOW_UPDATED);
+        indexShow(savedShow);
         return toResponse(savedShow);
     }
 
@@ -117,6 +124,7 @@ public class ShowService {
             show.getStatus().name(),
             show.getCategory().getName()
         );
+        contentSearchService.delete("SHOW-" + id);
     }
 
     public ShowResponse submitForReview(Long id) {
@@ -124,6 +132,7 @@ public class ShowService {
         changeStatus(show, PublishingStatus.REVIEW, "Show moved to review");
         Show savedShow = showRepository.save(show);
         publishEvent(savedShow, ContentEventType.SHOW_SENT_TO_REVIEW);
+        indexShow(savedShow);
         return toResponse(savedShow);
     }
 
@@ -133,6 +142,7 @@ public class ShowService {
         show.setPublished(true);
         Show savedShow = showRepository.save(show);
         publishEvent(savedShow, ContentEventType.SHOW_PUBLISHED);
+        indexShow(savedShow);
         return toResponse(savedShow);
     }
 
@@ -142,6 +152,7 @@ public class ShowService {
         show.setPublished(false);
         Show savedShow = showRepository.save(show);
         publishEvent(savedShow, ContentEventType.SHOW_MOVED_TO_DRAFT);
+        indexShow(savedShow);
         return toResponse(savedShow);
     }
 
@@ -207,5 +218,17 @@ public class ShowService {
             show.getStatus().name(),
             show.getCategory().getName()
         );
+    }
+
+    private void indexShow(Show show) {
+        SearchDocument document = new SearchDocument();
+        document.setId("SHOW-" + show.getId());
+        document.setContentType("SHOW");
+        document.setContentId(show.getId());
+        document.setTitle(show.getTitle());
+        document.setDescription(show.getDescription());
+        document.setCategoryName(show.getCategory().getName());
+        document.setStatus(show.getStatus().name());
+        contentSearchService.index(document);
     }
 }
