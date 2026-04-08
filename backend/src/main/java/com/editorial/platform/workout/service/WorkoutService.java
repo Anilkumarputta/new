@@ -8,6 +8,9 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.editorial.platform.audit.model.AuditAction;
+import com.editorial.platform.audit.model.AuditEntityType;
+import com.editorial.platform.audit.service.AuditLogService;
 import com.editorial.platform.category.model.Category;
 import com.editorial.platform.category.repository.CategoryRepository;
 import com.editorial.platform.common.exception.BadRequestException;
@@ -25,10 +28,16 @@ public class WorkoutService {
 
     private final WorkoutRepository workoutRepository;
     private final CategoryRepository categoryRepository;
+    private final AuditLogService auditLogService;
 
-    public WorkoutService(WorkoutRepository workoutRepository, CategoryRepository categoryRepository) {
+    public WorkoutService(
+        WorkoutRepository workoutRepository,
+        CategoryRepository categoryRepository,
+        AuditLogService auditLogService
+    ) {
         this.workoutRepository = workoutRepository;
         this.categoryRepository = categoryRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -48,18 +57,91 @@ public class WorkoutService {
         Workout workout = new Workout();
         applyRequest(workout, request);
         workout.setStatus(PublishingStatus.DRAFT);
-        return toResponse(workoutRepository.save(workout));
+        Workout savedWorkout = workoutRepository.save(workout);
+        auditLogService.logChange(
+            AuditEntityType.WORKOUT,
+            savedWorkout.getId(),
+            AuditAction.CREATED,
+            null,
+            savedWorkout.getStatus(),
+            "Workout created"
+        );
+        return toResponse(savedWorkout);
     }
 
     public WorkoutResponse updateWorkout(Long id, WorkoutRequest request) {
         Workout workout = findWorkout(id);
         applyRequest(workout, request);
-        return toResponse(workoutRepository.save(workout));
+        Workout savedWorkout = workoutRepository.save(workout);
+        auditLogService.logChange(
+            AuditEntityType.WORKOUT,
+            savedWorkout.getId(),
+            AuditAction.UPDATED,
+            savedWorkout.getStatus(),
+            savedWorkout.getStatus(),
+            "Workout details updated"
+        );
+        return toResponse(savedWorkout);
     }
 
     public void deleteWorkout(Long id) {
         Workout workout = findWorkout(id);
         workoutRepository.delete(workout);
+        auditLogService.logChange(
+            AuditEntityType.WORKOUT,
+            id,
+            AuditAction.DELETED,
+            workout.getStatus(),
+            null,
+            "Workout deleted"
+        );
+    }
+
+    public WorkoutResponse submitForReview(Long id) {
+        Workout workout = findWorkout(id);
+        changeStatus(workout, PublishingStatus.REVIEW, "Workout moved to review");
+        return toResponse(workoutRepository.save(workout));
+    }
+
+    public WorkoutResponse publish(Long id) {
+        Workout workout = findWorkout(id);
+        changeStatus(workout, PublishingStatus.PUBLISHED, "Workout published");
+        return toResponse(workoutRepository.save(workout));
+    }
+
+    public WorkoutResponse moveBackToDraft(Long id) {
+        Workout workout = findWorkout(id);
+        changeStatus(workout, PublishingStatus.DRAFT, "Workout moved back to draft");
+        return toResponse(workoutRepository.save(workout));
+    }
+
+    private void changeStatus(Workout workout, PublishingStatus targetStatus, String message) {
+        PublishingStatus currentStatus = workout.getStatus();
+
+        if (currentStatus == targetStatus) {
+            throw new BadRequestException("Workout is already in status " + targetStatus.name());
+        }
+
+        boolean validTransition =
+            (currentStatus == PublishingStatus.DRAFT && targetStatus == PublishingStatus.REVIEW)
+                || (currentStatus == PublishingStatus.REVIEW && targetStatus == PublishingStatus.PUBLISHED)
+                || (currentStatus == PublishingStatus.PUBLISHED && targetStatus == PublishingStatus.DRAFT);
+
+        if (!validTransition) {
+            throw new BadRequestException(
+                "Invalid status transition from " + currentStatus.name() + " to " + targetStatus.name()
+            );
+        }
+
+        workout.setStatus(targetStatus);
+        auditLogService.logChange(
+            AuditEntityType.WORKOUT,
+            workout.getId(),
+            AuditAction.STATUS_CHANGED,
+            currentStatus,
+            targetStatus,
+            message
+        );
     }
 
     private void applyRequest(Workout workout, WorkoutRequest request) {
