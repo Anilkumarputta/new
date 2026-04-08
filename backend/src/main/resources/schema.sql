@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS workout_tags;
+DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS workouts;
 DROP TABLE IF EXISTS shows;
 DROP TABLE IF EXISTS categories;
@@ -39,4 +40,16 @@ CREATE TABLE workout_tags (
     workout_id BIGINT NOT NULL,
     tag VARCHAR(80) NOT NULL,
     CONSTRAINT fk_workout_tag_workout FOREIGN KEY (workout_id) REFERENCES workouts (id) ON DELETE CASCADE
+);
+
+CREATE TABLE audit_logs (
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    entity_type VARCHAR(30) NOT NULL,
+    entity_id BIGINT NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    old_status VARCHAR(30),
+    new_status VARCHAR(30),
+    actor_name VARCHAR(120) NOT NULL,
+    message VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL
 );

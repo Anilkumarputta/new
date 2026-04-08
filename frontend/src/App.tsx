@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
+import { AuditLogPanel } from "./components/AuditLogPanel";
 import { ShowManager } from "./components/ShowManager";
 import { WorkoutManager } from "./components/WorkoutManager";
-import type { Category, Show, Workout } from "./types";
+import type { AuditLog, Category, Show, Workout } from "./types";
 
 type ActiveView = "shows" | "workouts";
 type LoadState = "idle" | "loading" | "success" | "error";
@@ -20,6 +21,7 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [shows, setShows] = useState<Show[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [pageError, setPageError] = useState("");
 
@@ -32,15 +34,17 @@ export default function App() {
     setPageError("");
 
     try {
-      const [loadedCategories, loadedShows, loadedWorkouts] = await Promise.all([
+      const [loadedCategories, loadedShows, loadedWorkouts, loadedAuditLogs] = await Promise.all([
         api.getCategories(),
         api.getShows(),
-        api.getWorkouts()
+        api.getWorkouts(),
+        api.getAuditLogs()
       ]);
 
       setCategories(loadedCategories);
       setShows(loadedShows);
       setWorkouts(loadedWorkouts);
+      setAuditLogs(loadedAuditLogs);
       setLoadState("success");
     } catch (error) {
       setPageError(extractErrorMessage(error));
@@ -58,12 +62,12 @@ export default function App() {
       {
         title: "Shows",
         value: String(shows.length),
-        description: "Show records now load from the backend instead of hard-coded mock data."
+        description: "Show records can now move through draft, review, and published workflow states."
       },
       {
         title: "Workouts",
         value: String(workouts.length),
-        description: "Workout records include trainer, difficulty, tags, and category data."
+        description: "Workout records now add audit events whenever editors change details or status."
       }
     ],
     [categories.length, shows.length, workouts.length]
@@ -79,8 +83,8 @@ export default function App() {
             </p>
             <h1 className="mt-1 text-2xl font-bold">Editorial Content Management Platform</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Phase 3 connects the React admin app to live Spring Boot APIs so editors can create,
-              update, and delete content from one screen.
+              Phase 4 adds a publishing workflow and audit trail so editors can move content from
+              draft to review to published with a visible activity history.
             </p>
           </div>
           <button
@@ -150,12 +154,23 @@ export default function App() {
             </div>
           )}
 
-          <div className="mt-8">
+          <div className="mt-8 space-y-8">
             {activeView === "shows" ? (
-              <ShowManager categories={categories} shows={shows} setShows={setShows} />
+              <ShowManager
+                categories={categories}
+                shows={shows}
+                setShows={setShows}
+                refreshAuditLogs={async () => setAuditLogs(await api.getAuditLogs())}
+              />
             ) : (
-              <WorkoutManager categories={categories} workouts={workouts} setWorkouts={setWorkouts} />
+              <WorkoutManager
+                categories={categories}
+                workouts={workouts}
+                setWorkouts={setWorkouts}
+                refreshAuditLogs={async () => setAuditLogs(await api.getAuditLogs())}
+              />
             )}
+            <AuditLogPanel logs={auditLogs} />
           </div>
         </section>
       </main>

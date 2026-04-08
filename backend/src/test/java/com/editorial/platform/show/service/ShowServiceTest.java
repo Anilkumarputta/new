@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.editorial.platform.audit.service.AuditLogService;
 import com.editorial.platform.category.model.Category;
 import com.editorial.platform.category.repository.CategoryRepository;
+import com.editorial.platform.common.exception.BadRequestException;
 import com.editorial.platform.common.exception.ResourceNotFoundException;
 import com.editorial.platform.common.model.PublishingStatus;
 import com.editorial.platform.event.service.ContentEventPublisher;
@@ -88,5 +89,26 @@ class ShowServiceTest {
         assertThatThrownBy(() -> showService.createShow(request))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Category not found");
+    }
+
+    @Test
+    void publishShouldFailWhenShowIsStillDraft() {
+        Category category = new Category();
+        category.setId(1L);
+        category.setName("Strength");
+
+        Show show = new Show();
+        show.setId(1L);
+        show.setTitle("Morning Burn");
+        show.setDescription("Draft show");
+        show.setCategory(category);
+        show.setStatus(PublishingStatus.DRAFT);
+        show.setPublished(false);
+
+        when(showRepository.findById(1L)).thenReturn(Optional.of(show));
+
+        assertThatThrownBy(() -> showService.publish(1L))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessageContaining("Invalid status transition");
     }
 }

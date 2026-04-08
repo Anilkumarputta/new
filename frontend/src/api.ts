@@ -1,4 +1,4 @@
-import type { Category, Show, ShowPayload, Workout, WorkoutPayload } from "./types";
+import type { AuditLog, Category, Show, ShowPayload, Workout, WorkoutPayload } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1";
 
@@ -25,6 +25,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   getCategories: () => request<Category[]>("/categories"),
+  getAuditLogs: () => request<AuditLog[]>("/audit-logs"),
   getShows: () => request<Show[]>("/shows"),
   createShow: (payload: ShowPayload) =>
     request<Show>("/shows", {
@@ -35,6 +36,18 @@ export const api = {
     request<Show>(`/shows/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload)
+    }),
+  submitShowForReview: (id: number) =>
+    request<Show>(`/shows/${id}/submit-for-review`, {
+      method: "POST"
+    }),
+  publishShow: (id: number) =>
+    request<Show>(`/shows/${id}/publish`, {
+      method: "POST"
+    }),
+  moveShowBackToDraft: (id: number) =>
+    request<Show>(`/shows/${id}/move-back-to-draft`, {
+      method: "POST"
     }),
   deleteShow: (id: number) =>
     request<void>(`/shows/${id}`, {
@@ -50,6 +63,18 @@ export const api = {
     request<Workout>(`/workouts/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload)
+    }),
+  submitWorkoutForReview: (id: number) =>
+    request<Workout>(`/workouts/${id}/submit-for-review`, {
+      method: "POST"
+    }),
+  publishWorkout: (id: number) =>
+    request<Workout>(`/workouts/${id}/publish`, {
+      method: "POST"
+    }),
+  moveWorkoutBackToDraft: (id: number) =>
+    request<Workout>(`/workouts/${id}/move-back-to-draft`, {
+      method: "POST"
     }),
   deleteWorkout: (id: number) =>
     request<void>(`/workouts/${id}`, {

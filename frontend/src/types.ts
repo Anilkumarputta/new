@@ -50,3 +50,15 @@ export interface WorkoutPayload {
   categoryId: number;
   tags: string[];
 }
+
+export interface AuditLog {
+  id: number;
+  entityType: "SHOW" | "WORKOUT";
+  entityId: number;
+  action: "CREATED" | "UPDATED" | "DELETED" | "STATUS_CHANGED";
+  oldStatus: string | null;
+  newStatus: string | null;
+  actorName: string;
+  message: string;
+  createdAt: string;
+}

@@ -52,6 +52,21 @@ public class WorkoutController {
         return ResponseEntity.ok(workoutService.updateWorkout(id, request));
     }
 
+    @PostMapping("/{id}/submit-for-review")
+    public ResponseEntity<WorkoutResponse> submitForReview(@PathVariable Long id) {
+        return ResponseEntity.ok(workoutService.submitForReview(id));
+    }
+
+    @PostMapping("/{id}/publish")
+    public ResponseEntity<WorkoutResponse> publish(@PathVariable Long id) {
+        return ResponseEntity.ok(workoutService.publish(id));
+    }
+
+    @PostMapping("/{id}/move-back-to-draft")
+    public ResponseEntity<WorkoutResponse> moveBackToDraft(@PathVariable Long id) {
+        return ResponseEntity.ok(workoutService.moveBackToDraft(id));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteWorkout(@PathVariable Long id) {
         workoutService.deleteWorkout(id);

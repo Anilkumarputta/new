@@ -52,6 +52,21 @@ public class ShowController {
         return ResponseEntity.ok(showService.updateShow(id, request));
     }
 
+    @PostMapping("/{id}/submit-for-review")
+    public ResponseEntity<ShowResponse> submitForReview(@PathVariable Long id) {
+        return ResponseEntity.ok(showService.submitForReview(id));
+    }
+
+    @PostMapping("/{id}/publish")
+    public ResponseEntity<ShowResponse> publish(@PathVariable Long id) {
+        return ResponseEntity.ok(showService.publish(id));
+    }
+
+    @PostMapping("/{id}/move-back-to-draft")
+    public ResponseEntity<ShowResponse> moveBackToDraft(@PathVariable Long id) {
+        return ResponseEntity.ok(showService.moveBackToDraft(id));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteShow(@PathVariable Long id) {
         showService.deleteShow(id);
