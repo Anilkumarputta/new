@@ -18,3 +18,24 @@ vendor/
 # Build output
 dist/
 build/
+.DS_Store
+Thumbs.db
+
+.idea/
+.vscode/
+
+node_modules/
+dist/
+coverage/
+
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+.env
+*.log
+
+backend/target/
+frontend/node_modules/
+frontend/dist/
+
+postgres-data/
