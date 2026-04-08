@@ -1,0 +1,267 @@
+import type { Dispatch, FormEvent, SetStateAction } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../api";
+import type { Category, Show, ShowPayload } from "../types";
+
+interface ShowManagerProps {
+  categories: Category[];
+  shows: Show[];
+  setShows: Dispatch<SetStateAction<Show[]>>;
+}
+
+interface ShowFormState {
+  title: string;
+  description: string;
+  categoryId: string;
+}
+
+const emptyShowForm: ShowFormState = {
+  title: "",
+  description: "",
+  categoryId: ""
+};
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Something went wrong. Please try again.";
+}
+
+function formatDate(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
+function toPayload(form: ShowFormState): ShowPayload {
+  return {
+    title: form.title.trim(),
+    description: form.description.trim(),
+    categoryId: Number(form.categoryId)
+  };
+}
+
+export function ShowManager({ categories, shows, setShows }: ShowManagerProps) {
+  const [form, setForm] = useState<ShowFormState>(emptyShowForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!form.categoryId && categories[0]) {
+      setForm((current) => ({ ...current, categoryId: String(categories[0].id) }));
+    }
+  }, [categories, form.categoryId]);
+
+  function resetForm() {
+    setEditingId(null);
+    setForm({
+      ...emptyShowForm,
+      categoryId: categories[0] ? String(categories[0].id) : ""
+    });
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setMessage("");
+
+    try {
+      const payload = toPayload(form);
+      const savedShow = editingId
+        ? await api.updateShow(editingId, payload)
+        : await api.createShow(payload);
+
+      setShows((current) => {
+        if (editingId) {
+          return current.map((show) => (show.id === savedShow.id ? savedShow : show));
+        }
+
+        return [savedShow, ...current];
+      });
+
+      setMessage(editingId ? "Show updated successfully." : "Show created successfully.");
+      resetForm();
+    } catch (error) {
+      setMessage(extractErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    setMessage("");
+
+    try {
+      await api.deleteShow(id);
+      setShows((current) => current.filter((show) => show.id !== id));
+      if (editingId === id) {
+        resetForm();
+      }
+      setMessage("Show deleted successfully.");
+    } catch (error) {
+      setMessage(extractErrorMessage(error));
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function startEdit(show: Show) {
+    setEditingId(show.id);
+    setMessage("");
+    setForm({
+      title: show.title,
+      description: show.description,
+      categoryId: String(show.categoryId)
+    });
+  }
+
+  return (
+    <div className="grid gap-8 xl:grid-cols-[380px_1fr]">
+      <form onSubmit={handleSubmit} className="rounded-3xl bg-slate-50 p-6 ring-1 ring-slate-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">{editingId ? "Edit Show" : "Create Show"}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              This form sends JSON to `POST /shows` or `PUT /shows/{'{id}'}`.
+            </p>
+          </div>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-sm font-semibold text-slate-600 hover:text-slate-900"
+            >
+              Cancel Edit
+            </button>
+          )}
+        </div>
+
+        {message && (
+          <div className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {message}
+          </div>
+        )}
+
+        <div className="mt-6 space-y-4">
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Title</span>
+            <input
+              value={form.title}
+              onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-200"
+              placeholder="Example: Evening Flow"
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Description</span>
+            <textarea
+              value={form.description}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, description: event.target.value }))
+              }
+              className="mt-2 min-h-28 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-200"
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Category</span>
+            <select
+              value={form.categoryId}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, categoryId: event.target.value }))
+              }
+              className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-200"
+              required
+            >
+              <option value="">Select a category</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <button
+          type="submit"
+          disabled={submitting || categories.length === 0}
+          className="mt-6 w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-300"
+        >
+          {submitting ? "Saving..." : editingId ? "Update Show" : "Create Show"}
+        </button>
+      </form>
+
+      <section className="overflow-hidden rounded-3xl bg-white ring-1 ring-slate-200">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <h2 className="text-xl font-semibold">Shows Table</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Each row below comes from the live backend API.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-600">
+              <tr>
+                <th className="px-6 py-4 font-semibold">Title</th>
+                <th className="px-6 py-4 font-semibold">Category</th>
+                <th className="px-6 py-4 font-semibold">Status</th>
+                <th className="px-6 py-4 font-semibold">Updated</th>
+                <th className="px-6 py-4 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shows.map((show) => (
+                <tr key={show.id} className="border-t border-slate-200">
+                  <td className="px-6 py-4">
+                    <p className="font-semibold text-slate-900">{show.title}</p>
+                    <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">{show.description}</p>
+                  </td>
+                  <td className="px-6 py-4">{show.categoryName}</td>
+                  <td className="px-6 py-4">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                      {show.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-slate-500">{formatDate(show.updatedAt)}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(show)}
+                        className="text-sm font-semibold text-orange-600 hover:text-orange-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(show.id)}
+                        disabled={deletingId === show.id}
+                        className="text-sm font-semibold text-red-600 hover:text-red-700 disabled:text-red-300"
+                      >
+                        {deletingId === show.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {shows.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center text-slate-500">
+                    No shows found yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
