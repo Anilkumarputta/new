@@ -13,9 +13,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.editorial.platform.audit.service.AuditLogService;
 import com.editorial.platform.category.model.Category;
 import com.editorial.platform.category.repository.CategoryRepository;
+import com.editorial.platform.common.exception.BadRequestException;
 import com.editorial.platform.common.exception.ResourceNotFoundException;
+import com.editorial.platform.common.model.PublishingStatus;
 import com.editorial.platform.show.api.dto.ShowRequest;
 import com.editorial.platform.show.api.dto.ShowResponse;
 import com.editorial.platform.show.model.Show;
@@ -30,11 +33,14 @@ class ShowServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     private ShowService showService;
 
     @BeforeEach
     void setUp() {
-        showService = new ShowService(showRepository, categoryRepository);
+        showService = new ShowService(showRepository, categoryRepository, auditLogService);
     }
 
     @Test
@@ -79,5 +85,26 @@ class ShowServiceTest {
         assertThatThrownBy(() -> showService.createShow(request))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Category not found");
+    }
+
+    @Test
+    void publishShouldFailWhenShowIsStillDraft() {
+        Category category = new Category();
+        category.setId(1L);
+        category.setName("Strength");
+
+        Show show = new Show();
+        show.setId(1L);
+        show.setTitle("Morning Burn");
+        show.setDescription("Draft show");
+        show.setCategory(category);
+        show.setStatus(PublishingStatus.DRAFT);
+        show.setPublished(false);
+
+        when(showRepository.findById(1L)).thenReturn(Optional.of(show));
+
+        assertThatThrownBy(() -> showService.publish(1L))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessageContaining("Invalid status transition");
     }
 }

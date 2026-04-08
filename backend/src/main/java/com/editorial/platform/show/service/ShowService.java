@@ -5,8 +5,12 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.editorial.platform.audit.model.AuditAction;
+import com.editorial.platform.audit.model.AuditEntityType;
+import com.editorial.platform.audit.service.AuditLogService;
 import com.editorial.platform.category.model.Category;
 import com.editorial.platform.category.repository.CategoryRepository;
+import com.editorial.platform.common.exception.BadRequestException;
 import com.editorial.platform.common.exception.ResourceNotFoundException;
 import com.editorial.platform.common.model.PublishingStatus;
 import com.editorial.platform.show.api.dto.ShowRequest;
@@ -20,10 +24,16 @@ public class ShowService {
 
     private final ShowRepository showRepository;
     private final CategoryRepository categoryRepository;
+    private final AuditLogService auditLogService;
 
-    public ShowService(ShowRepository showRepository, CategoryRepository categoryRepository) {
+    public ShowService(
+        ShowRepository showRepository,
+        CategoryRepository categoryRepository,
+        AuditLogService auditLogService
+    ) {
         this.showRepository = showRepository;
         this.categoryRepository = categoryRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -49,7 +59,16 @@ public class ShowService {
         show.setStatus(PublishingStatus.DRAFT);
         show.setPublished(false);
 
-        return toResponse(showRepository.save(show));
+        Show savedShow = showRepository.save(show);
+        auditLogService.logChange(
+            AuditEntityType.SHOW,
+            savedShow.getId(),
+            AuditAction.CREATED,
+            null,
+            savedShow.getStatus(),
+            "Show created"
+        );
+        return toResponse(savedShow);
     }
 
     public ShowResponse updateShow(Long id, ShowRequest request) {
@@ -60,12 +79,78 @@ public class ShowService {
         show.setDescription(request.getDescription().trim());
         show.setCategory(category);
 
-        return toResponse(showRepository.save(show));
+        Show savedShow = showRepository.save(show);
+        auditLogService.logChange(
+            AuditEntityType.SHOW,
+            savedShow.getId(),
+            AuditAction.UPDATED,
+            savedShow.getStatus(),
+            savedShow.getStatus(),
+            "Show details updated"
+        );
+        return toResponse(savedShow);
     }
 
     public void deleteShow(Long id) {
         Show show = findShow(id);
         showRepository.delete(show);
+        auditLogService.logChange(
+            AuditEntityType.SHOW,
+            id,
+            AuditAction.DELETED,
+            show.getStatus(),
+            null,
+            "Show deleted"
+        );
+    }
+
+    public ShowResponse submitForReview(Long id) {
+        Show show = findShow(id);
+        changeStatus(show, PublishingStatus.REVIEW, "Show moved to review");
+        return toResponse(showRepository.save(show));
+    }
+
+    public ShowResponse publish(Long id) {
+        Show show = findShow(id);
+        changeStatus(show, PublishingStatus.PUBLISHED, "Show published");
+        show.setPublished(true);
+        return toResponse(showRepository.save(show));
+    }
+
+    public ShowResponse moveBackToDraft(Long id) {
+        Show show = findShow(id);
+        changeStatus(show, PublishingStatus.DRAFT, "Show moved back to draft");
+        show.setPublished(false);
+        return toResponse(showRepository.save(show));
+    }
+
+    private void changeStatus(Show show, PublishingStatus targetStatus, String message) {
+        PublishingStatus currentStatus = show.getStatus();
+
+        if (currentStatus == targetStatus) {
+            throw new BadRequestException("Show is already in status " + targetStatus.name());
+        }
+
+        boolean validTransition =
+            (currentStatus == PublishingStatus.DRAFT && targetStatus == PublishingStatus.REVIEW)
+                || (currentStatus == PublishingStatus.REVIEW && targetStatus == PublishingStatus.PUBLISHED)
+                || (currentStatus == PublishingStatus.PUBLISHED && targetStatus == PublishingStatus.DRAFT);
+
+        if (!validTransition) {
+            throw new BadRequestException(
+                "Invalid status transition from " + currentStatus.name() + " to " + targetStatus.name()
+            );
+        }
+
+        show.setStatus(targetStatus);
+        auditLogService.logChange(
+            AuditEntityType.SHOW,
+            show.getId(),
+            AuditAction.STATUS_CHANGED,
+            currentStatus,
+            targetStatus,
+            message
+        );
     }
 
     private Show findShow(Long id) {
