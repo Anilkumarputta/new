@@ -18,6 +18,8 @@ import com.editorial.platform.common.exception.ResourceNotFoundException;
 import com.editorial.platform.common.model.PublishingStatus;
 import com.editorial.platform.event.model.ContentEventType;
 import com.editorial.platform.event.service.ContentEventPublisher;
+import com.editorial.platform.search.model.SearchDocument;
+import com.editorial.platform.search.service.ContentSearchService;
 import com.editorial.platform.workout.api.dto.WorkoutRequest;
 import com.editorial.platform.workout.api.dto.WorkoutResponse;
 import com.editorial.platform.workout.model.Workout;
@@ -32,17 +34,20 @@ public class WorkoutService {
     private final CategoryRepository categoryRepository;
     private final AuditLogService auditLogService;
     private final ContentEventPublisher contentEventPublisher;
+    private final ContentSearchService contentSearchService;
 
     public WorkoutService(
         WorkoutRepository workoutRepository,
         CategoryRepository categoryRepository,
         AuditLogService auditLogService,
-        ContentEventPublisher contentEventPublisher
+        ContentEventPublisher contentEventPublisher,
+        ContentSearchService contentSearchService
     ) {
         this.workoutRepository = workoutRepository;
         this.categoryRepository = categoryRepository;
         this.auditLogService = auditLogService;
         this.contentEventPublisher = contentEventPublisher;
+        this.contentSearchService = contentSearchService;
     }
 
     @Transactional(readOnly = true)
@@ -72,6 +77,7 @@ public class WorkoutService {
             "Workout created"
         );
         publishEvent(savedWorkout, ContentEventType.WORKOUT_CREATED);
+        indexWorkout(savedWorkout);
         return toResponse(savedWorkout);
     }
 
@@ -88,6 +94,7 @@ public class WorkoutService {
             "Workout details updated"
         );
         publishEvent(savedWorkout, ContentEventType.WORKOUT_UPDATED);
+        indexWorkout(savedWorkout);
         return toResponse(savedWorkout);
     }
 
@@ -110,6 +117,7 @@ public class WorkoutService {
             workout.getStatus().name(),
             workout.getCategory().getName()
         );
+        contentSearchService.delete("WORKOUT-" + id);
     }
 
     public WorkoutResponse submitForReview(Long id) {
@@ -117,6 +125,7 @@ public class WorkoutService {
         changeStatus(workout, PublishingStatus.REVIEW, "Workout moved to review");
         Workout savedWorkout = workoutRepository.save(workout);
         publishEvent(savedWorkout, ContentEventType.WORKOUT_SENT_TO_REVIEW);
+        indexWorkout(savedWorkout);
         return toResponse(savedWorkout);
     }
 
@@ -125,6 +134,7 @@ public class WorkoutService {
         changeStatus(workout, PublishingStatus.PUBLISHED, "Workout published");
         Workout savedWorkout = workoutRepository.save(workout);
         publishEvent(savedWorkout, ContentEventType.WORKOUT_PUBLISHED);
+        indexWorkout(savedWorkout);
         return toResponse(savedWorkout);
     }
 
@@ -133,6 +143,7 @@ public class WorkoutService {
         changeStatus(workout, PublishingStatus.DRAFT, "Workout moved back to draft");
         Workout savedWorkout = workoutRepository.save(workout);
         publishEvent(savedWorkout, ContentEventType.WORKOUT_MOVED_TO_DRAFT);
+        indexWorkout(savedWorkout);
         return toResponse(savedWorkout);
     }
 
@@ -237,5 +248,19 @@ public class WorkoutService {
             workout.getStatus().name(),
             workout.getCategory().getName()
         );
+    }
+
+    private void indexWorkout(Workout workout) {
+        SearchDocument document = new SearchDocument();
+        document.setId("WORKOUT-" + workout.getId());
+        document.setContentType("WORKOUT");
+        document.setContentId(workout.getId());
+        document.setTitle(workout.getTitle());
+        document.setDescription(workout.getDescription());
+        document.setCategoryName(workout.getCategory().getName());
+        document.setTrainerName(workout.getTrainerName());
+        document.setStatus(workout.getStatus().name());
+        document.setTags(new java.util.ArrayList<>(workout.getTags()));
+        contentSearchService.index(document);
     }
 }
