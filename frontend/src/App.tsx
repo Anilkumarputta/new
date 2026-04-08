@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { AuditLogPanel } from "./components/AuditLogPanel";
+import { SearchPanel } from "./components/SearchPanel";
 import { ShowManager } from "./components/ShowManager";
 import { WorkoutManager } from "./components/WorkoutManager";
 import type { AuditLog, Category, Show, Workout } from "./types";
@@ -170,6 +171,7 @@ export default function App() {
                 refreshAuditLogs={async () => setAuditLogs(await api.getAuditLogs())}
               />
             )}
+            <SearchPanel categories={categories} />
             <AuditLogPanel logs={auditLogs} />
           </div>
         </section>

@@ -62,3 +62,15 @@ export interface AuditLog {
   message: string;
   createdAt: string;
 }
+
+export interface SearchResult {
+  id: string;
+  contentType: string;
+  contentId: number;
+  title: string;
+  description: string;
+  categoryName: string;
+  trainerName: string | null;
+  status: string;
+  tags: string[];
+}
