@@ -5,6 +5,12 @@ spring:
     url: jdbc:postgresql://localhost:5432/editorial_platform
     username: editorial_user
     password: editorial_password
+  cassandra:
+    contact-points: localhost
+    port: 9042
+    keyspace-name: editorial_read_model
+    local-datacenter: datacenter1
+    schema-action: create_if_not_exists
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
