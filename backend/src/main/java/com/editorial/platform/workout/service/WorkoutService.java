@@ -8,11 +8,16 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.editorial.platform.audit.model.AuditAction;
+import com.editorial.platform.audit.model.AuditEntityType;
+import com.editorial.platform.audit.service.AuditLogService;
 import com.editorial.platform.category.model.Category;
 import com.editorial.platform.category.repository.CategoryRepository;
 import com.editorial.platform.common.exception.BadRequestException;
 import com.editorial.platform.common.exception.ResourceNotFoundException;
 import com.editorial.platform.common.model.PublishingStatus;
+import com.editorial.platform.event.model.ContentEventType;
+import com.editorial.platform.event.service.ContentEventPublisher;
 import com.editorial.platform.workout.api.dto.WorkoutRequest;
 import com.editorial.platform.workout.api.dto.WorkoutResponse;
 import com.editorial.platform.workout.model.Workout;
@@ -25,10 +30,19 @@ public class WorkoutService {
 
     private final WorkoutRepository workoutRepository;
     private final CategoryRepository categoryRepository;
+    private final AuditLogService auditLogService;
+    private final ContentEventPublisher contentEventPublisher;
 
-    public WorkoutService(WorkoutRepository workoutRepository, CategoryRepository categoryRepository) {
+    public WorkoutService(
+        WorkoutRepository workoutRepository,
+        CategoryRepository categoryRepository,
+        AuditLogService auditLogService,
+        ContentEventPublisher contentEventPublisher
+    ) {
         this.workoutRepository = workoutRepository;
         this.categoryRepository = categoryRepository;
+        this.auditLogService = auditLogService;
+        this.contentEventPublisher = contentEventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -48,18 +62,107 @@ public class WorkoutService {
         Workout workout = new Workout();
         applyRequest(workout, request);
         workout.setStatus(PublishingStatus.DRAFT);
-        return toResponse(workoutRepository.save(workout));
+        Workout savedWorkout = workoutRepository.save(workout);
+        auditLogService.logChange(
+            AuditEntityType.WORKOUT,
+            savedWorkout.getId(),
+            AuditAction.CREATED,
+            null,
+            savedWorkout.getStatus(),
+            "Workout created"
+        );
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_CREATED);
+        return toResponse(savedWorkout);
     }
 
     public WorkoutResponse updateWorkout(Long id, WorkoutRequest request) {
         Workout workout = findWorkout(id);
         applyRequest(workout, request);
-        return toResponse(workoutRepository.save(workout));
+        Workout savedWorkout = workoutRepository.save(workout);
+        auditLogService.logChange(
+            AuditEntityType.WORKOUT,
+            savedWorkout.getId(),
+            AuditAction.UPDATED,
+            savedWorkout.getStatus(),
+            savedWorkout.getStatus(),
+            "Workout details updated"
+        );
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_UPDATED);
+        return toResponse(savedWorkout);
     }
 
     public void deleteWorkout(Long id) {
         Workout workout = findWorkout(id);
         workoutRepository.delete(workout);
+        auditLogService.logChange(
+            AuditEntityType.WORKOUT,
+            id,
+            AuditAction.DELETED,
+            workout.getStatus(),
+            null,
+            "Workout deleted"
+        );
+        contentEventPublisher.publish(
+            ContentEventType.WORKOUT_DELETED,
+            "WORKOUT",
+            id,
+            workout.getTitle(),
+            workout.getStatus().name(),
+            workout.getCategory().getName()
+        );
+    }
+
+    public WorkoutResponse submitForReview(Long id) {
+        Workout workout = findWorkout(id);
+        changeStatus(workout, PublishingStatus.REVIEW, "Workout moved to review");
+        Workout savedWorkout = workoutRepository.save(workout);
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_SENT_TO_REVIEW);
+        return toResponse(savedWorkout);
+    }
+
+    public WorkoutResponse publish(Long id) {
+        Workout workout = findWorkout(id);
+        changeStatus(workout, PublishingStatus.PUBLISHED, "Workout published");
+        Workout savedWorkout = workoutRepository.save(workout);
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_PUBLISHED);
+        return toResponse(savedWorkout);
+    }
+
+    public WorkoutResponse moveBackToDraft(Long id) {
+        Workout workout = findWorkout(id);
+        changeStatus(workout, PublishingStatus.DRAFT, "Workout moved back to draft");
+        Workout savedWorkout = workoutRepository.save(workout);
+        publishEvent(savedWorkout, ContentEventType.WORKOUT_MOVED_TO_DRAFT);
+        return toResponse(savedWorkout);
+    }
+
+    private void changeStatus(Workout workout, PublishingStatus targetStatus, String message) {
+        PublishingStatus currentStatus = workout.getStatus();
+
+        if (currentStatus == targetStatus) {
+            throw new BadRequestException("Workout is already in status " + targetStatus.name());
+        }
+
+        boolean validTransition =
+            (currentStatus == PublishingStatus.DRAFT && targetStatus == PublishingStatus.REVIEW)
+                || (currentStatus == PublishingStatus.REVIEW && targetStatus == PublishingStatus.PUBLISHED)
+                || (currentStatus == PublishingStatus.PUBLISHED && targetStatus == PublishingStatus.DRAFT);
+
+        if (!validTransition) {
+            throw new BadRequestException(
+                "Invalid status transition from " + currentStatus.name() + " to " + targetStatus.name()
+            );
+        }
+
+        workout.setStatus(targetStatus);
+        auditLogService.logChange(
+            AuditEntityType.WORKOUT,
+            workout.getId(),
+            AuditAction.STATUS_CHANGED,
+            currentStatus,
+            targetStatus,
+            message
+        );
     }
 
     private void applyRequest(Workout workout, WorkoutRequest request) {
@@ -123,5 +226,16 @@ public class WorkoutService {
         response.setCreatedAt(workout.getCreatedAt());
         response.setUpdatedAt(workout.getUpdatedAt());
         return response;
+    }
+
+    private void publishEvent(Workout workout, ContentEventType eventType) {
+        contentEventPublisher.publish(
+            eventType,
+            "WORKOUT",
+            workout.getId(),
+            workout.getTitle(),
+            workout.getStatus().name(),
+            workout.getCategory().getName()
+        );
     }
 }

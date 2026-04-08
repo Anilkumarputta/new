@@ -1,0 +1,16 @@
+package com.editorial.platform.event.model;
+
+public enum ContentEventType {
+    SHOW_CREATED,
+    SHOW_UPDATED,
+    SHOW_SENT_TO_REVIEW,
+    SHOW_PUBLISHED,
+    SHOW_MOVED_TO_DRAFT,
+    SHOW_DELETED,
+    WORKOUT_CREATED,
+    WORKOUT_UPDATED,
+    WORKOUT_SENT_TO_REVIEW,
+    WORKOUT_PUBLISHED,
+    WORKOUT_MOVED_TO_DRAFT,
+    WORKOUT_DELETED
+}

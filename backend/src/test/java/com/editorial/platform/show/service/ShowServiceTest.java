@@ -13,9 +13,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.editorial.platform.audit.service.AuditLogService;
 import com.editorial.platform.category.model.Category;
 import com.editorial.platform.category.repository.CategoryRepository;
 import com.editorial.platform.common.exception.ResourceNotFoundException;
+import com.editorial.platform.common.model.PublishingStatus;
+import com.editorial.platform.event.service.ContentEventPublisher;
 import com.editorial.platform.show.api.dto.ShowRequest;
 import com.editorial.platform.show.api.dto.ShowResponse;
 import com.editorial.platform.show.model.Show;
@@ -30,11 +33,17 @@ class ShowServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
+    @Mock
+    private ContentEventPublisher contentEventPublisher;
+
     private ShowService showService;
 
     @BeforeEach
     void setUp() {
-        showService = new ShowService(showRepository, categoryRepository);
+        showService = new ShowService(showRepository, categoryRepository, auditLogService, contentEventPublisher);
     }
 
     @Test
@@ -53,7 +62,7 @@ class ShowServiceTest {
         savedShow.setTitle(request.getTitle());
         savedShow.setDescription(request.getDescription());
         savedShow.setCategory(category);
-        savedShow.setStatus(com.editorial.platform.common.model.PublishingStatus.DRAFT);
+        savedShow.setStatus(PublishingStatus.DRAFT);
         savedShow.setPublished(false);
 
         when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
